@@ -155,3 +155,7 @@ There is an example web app client you can deploy for testing purposes.
         aws s3 cp static/web s3://[WEB BUCKET NAME] --recursive --acl public-read
  
 1. Open the website at http://[WEB BUCKET NAME].s3.amazonaws.com/index.html
+
+## User Guide
+
+Find more details about the use of the API in the [User Guide](user_guide.md).
