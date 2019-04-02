@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+    <link href="https://unpkg.com/filepond/dist/filepond.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <title>Filestore Project</title>
+
+    <div class="container">
+        <h1 class="mt-5">FileStore Serverless App</h1>
+        <p>An example browser client based on <a href="https://pqina.nl/filepond/">FilePond</a> for uploading files to S3.</p>
+        <p>The form does not have a URL configured for POST-ing, you will receive an error when submitting.</p>
+        <form method="POST" action="#">
+            <input class="filepond" type="file" id="file1" name="file1" multiple="true" data-max-files="3">
+            <button class="btn btn-primary" type="submit">Send</button>
+        </form>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://unpkg.com/filepond/dist/filepond.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <script src="uploader.js"></script>
+    <script>
+        FilestoreUploader.setup('https://1bl9ptlqt6.execute-api.eu-west-2.amazonaws.com/dev', document);
+    </script>
+</html>

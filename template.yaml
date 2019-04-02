@@ -1,0 +1,256 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: |
+  File store
+
+Parameters:
+  EnvironmentParameter:
+    Description: "Stage: dev, prod"
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  SwaggerLocation:
+    Description: "Swagger file location"
+    Type: String
+  StorageBucketName:
+    Description: "Name of the bucket where files are stored"
+    Type: String
+  SignedUrlExpiration:
+    Description: "Signed URL expiration time in seconds"
+    Type: Number
+    Default: 3600
+  StoreOnLoad:
+    Description: "Store files immediately after uploading"
+    Type: String
+    AllowedValues:
+      - True
+      - False
+    Default: False
+
+Conditions:
+  # create the scheduler if not storing on load
+  CreateExpirationScheduler: !Equals [ !Ref StoreOnLoad, False ]
+
+Globals:
+  Function:
+    Runtime: python3.7
+    MemorySize: 128
+    Tags:
+      AppName: Filestore
+
+Resources:
+
+  FilestoreApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: Filestore API
+      StageName:
+        !Ref EnvironmentParameter
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location:
+              !Ref SwaggerLocation
+
+  FilestoreApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    # NOTE: name of the stage is API name + 'Stage'
+    DependsOn: FilestoreApiStage
+    Properties:
+      ApiStages:
+      - ApiId: !Ref FilestoreApi
+        Stage: !Ref EnvironmentParameter
+      Description: Filestore Users Usage Plan
+      Quota:
+        Limit: 1000
+        Period: MONTH
+      Throttle:
+        BurstLimit: 20
+        RateLimit: 10
+      UsagePlanName: FilestoreUserPlan
+
+  FilePreprocessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 10
+      CodeUri: ./source/
+      Handler: functions.file.preprocess
+      FunctionName: Preprocess
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StorageBucketName
+          EXPIRATION: !Ref SignedUrlExpiration
+      # https://github.com/awslabs/serverless-application-model/blob/master/examples/2016-10-31/policy_templates/all_policy_templates.yaml
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StorageBucketName
+            # we have to have S3 CRUD here so the signature including the access id for the lambda function can upload
+        - DynamoDBCrudPolicy:
+            TableName: Files
+
+  FileUploadedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 30
+      CodeUri: ./source/
+      Handler: functions.file.uploaded
+      FunctionName: Uploaded
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StorageBucketName
+          STORE: !Ref StoreOnLoad
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StorageBucketName
+        - DynamoDBCrudPolicy:
+            TableName: Files
+      Events:
+        S3Uploaded:
+          Type: S3
+          Properties:
+            # NOTE: the bucket for this event must be defined in the same SAM template
+            Bucket: !Ref StorageBucket
+            # https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#supported-notification-event-types
+            Events: s3:ObjectCreated:*
+
+  FileStoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 30
+      CodeUri: ./source/
+      Handler: functions.file.store
+      FunctionName: Store
+      Environment:
+        Variables:
+          STORE: !Ref StoreOnLoad
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: Files
+
+  FileInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 30
+      CodeUri: ./source/
+      Handler: functions.file.info
+      FunctionName: Info
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StorageBucketName
+          EXPIRATION: !Ref SignedUrlExpiration
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StorageBucketName
+        - DynamoDBCrudPolicy:
+            TableName: Files
+
+  FileDeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 30
+      CodeUri: ./source/
+      Handler: functions.file.delete
+      FunctionName: Delete
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StorageBucketName
+          STORE: !Ref StoreOnLoad
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StorageBucketName
+        - DynamoDBCrudPolicy:
+            TableName: Files
+
+  FileExpireFunction:
+    Type: AWS::Serverless::Function
+    Condition: CreateExpirationScheduler
+    Properties:
+      Timeout: 30
+      CodeUri: ./source/
+      Handler: functions.file.expire
+      FunctionName: Expire
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StorageBucketName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: Files
+        - S3CrudPolicy:
+            BucketName: !Ref StorageBucketName
+      Events:
+        Timer:
+          Type: Schedule
+          Properties:
+            Schedule: rate(30 minutes)
+
+  FilestoreApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: FilestoreApiRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: apigateway.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Policies:
+        -
+          PolicyName: LambdaInvokeFunction
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource:
+                - "*"
+
+  FilesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Files
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  StorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref StorageBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders: ["*"]
+          AllowedMethods: [PUT,POST,GET]
+          AllowedOrigins: ["*"]
+
+Outputs:
+  ApiRootUrl:
+    Description: Root URL for the FileStore API
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref FilestoreApi
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/'
+        - !Ref EnvironmentParameter
+  UsagePlanId:
+    Description: UsagePlan ID for reference when creating usage plan keys
+    Value:
+      !Ref FilestoreApiUsagePlan

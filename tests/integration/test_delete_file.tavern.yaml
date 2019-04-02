@@ -1,0 +1,63 @@
+test_name: Delete file
+
+stages:
+
+  - name: Retrieve presigned url
+    request:
+      url: "{tavern.env_vars.TEST_HOST}/file"
+      method: POST
+      headers:
+        content-type: application/json
+      json:
+        name: test.pdf
+    response:
+      status_code: 200
+      body:
+        id: !anystr
+        url: !anystr
+      save:
+        body:
+          file_id: id
+          upload_url: url
+
+  - name: Upload file
+    request:
+      url: "{upload_url}"
+      method: PUT
+      # file upload uses multipart form, not ideal but works for the test
+      files:
+        test_file: "tests/integration/test.pdf"
+    response:
+      status_code: 200
+
+  - name: Delete file
+    request:
+      url: "{tavern.env_vars.TEST_HOST}/files"
+      method: DELETE
+      headers:
+        x-api-key: "{tavern.env_vars.TEST_API_KEY}"
+        content-type: application/json
+      json:
+        - "{file_id}"
+    response:
+      status_code: 200
+      body:
+        - "{file_id}"
+
+  - name: Check uploaded file
+    request:
+      url: "{tavern.env_vars.TEST_HOST}/files"
+      method: POST
+      params:
+        deleted: "yes"
+      headers:
+        x-api-key: "{tavern.env_vars.TEST_API_KEY}"
+      json:
+        - "{file_id}"
+    response:
+      status_code: 200
+      body:
+        -
+          id: "{file_id}"
+          name: "test.pdf"
+          deleted_at: !anystr

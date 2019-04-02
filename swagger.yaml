@@ -1,0 +1,182 @@
+swagger: '2.0'
+# Specification: https://swagger.io/specification/v2/
+
+info:
+  version: "1.0.0"
+  title: Filestore API
+
+schemes : [ "https" ]
+
+x-amazon-apigateway-api-key-source: HEADER
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    in: header
+    name: x-api-key
+
+paths:
+  /file:
+    # CORS support
+    # https://docs.aws.amazon.com/apigateway/latest/developerguide/enable-cors-for-resource-using-swagger-importer-tool.html
+    options:
+      description: CORS support
+      responses:
+        200:
+          description: Default response for CORS method
+          headers:
+            Access-Control-Allow-Headers:
+              type: string
+            Access-Control-Allow-Methods:
+              type: string
+            Access-Control-Allow-Origin:
+              type: string
+      x-amazon-apigateway-integration:
+        type: mock
+        httpMethod: OPTIONS
+        requestTemplates:
+          application/json: |
+            { "statusCode": 200 }
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+
+    post:
+      description: Request a signed URL for upload - essentially a file placeholder
+      consumes: ["application/json"]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+            required: ["name"]
+            additionalProperties: false
+      produces: ["application/json"]
+      responses:
+        200:
+          description: Successful response
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              url:
+                type: string
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FilePreprocessFunction.Arn}/invocations
+        credentials:
+          Fn::Sub: ${FilestoreApiRole.Arn}
+
+  /files/:
+    put:
+      description: Store files (secured)
+      security:
+        - ApiKeyAuth: []
+      consumes: ["application/json"]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfIds'
+      produces: ["application/json"]
+      responses:
+        200:
+          description: Successful response
+          schema:
+            $ref: '#/definitions/ArrayOfIds'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileStoreFunction.Arn}/invocations
+        credentials:
+          Fn::Sub: ${FilestoreApiRole.Arn}
+
+    post:
+      description: Get info for files (secured)
+      security:
+        - ApiKeyAuth: []
+      consumes: ["application/json"]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfIds'
+      produces: ["application/json"]
+      responses:
+        200:
+          description: Successful response
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/FileInfo'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileInfoFunction.Arn}/invocations
+        credentials:
+          Fn::Sub: ${FilestoreApiRole.Arn}
+
+    delete:
+      description: Delete files (secured)
+      security:
+        - ApiKeyAuth: []
+      consumes: ["application/json"]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfIds'
+      produces: ["application/json"]
+      responses:
+        200:
+          description: Successful response
+          schema:
+            $ref: '#/definitions/ArrayOfIds'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileDeleteFunction.Arn}/invocations
+        credentials:
+          Fn::Sub: ${FilestoreApiRole.Arn}
+
+definitions:
+
+  ArrayOfIds:
+    type: array
+    items:
+      type: string
+
+  FileInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      url:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+      size:
+        type: number
+      meta:
+        type: object

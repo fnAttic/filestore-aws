@@ -1,0 +1,53 @@
+test_name: Upload file
+
+stages:
+
+  - name: Retrieve presigned url
+    request:
+      url: "{tavern.env_vars.TEST_HOST}/file"
+      method: POST
+      headers:
+        content-type: application/json
+      json:
+        name: test.pdf
+    response:
+      status_code: 200
+      body:
+        id: !anystr
+        url: !anystr
+      save:
+        body:
+          file_id: id
+          upload_url: url
+
+  - name: Upload file
+    request:
+      url: "{upload_url}"
+      method: PUT
+      # file upload uses multipart form, not ideal but works for the test
+      files:
+        test_file: "tests/integration/test.pdf"
+    response:
+      status_code: 200
+    # wait 5 sec for the S3 trigger/lambda to update the item
+    delay_after: 5
+
+  - name: Check uploaded file
+    request:
+      url: "{tavern.env_vars.TEST_HOST}/files"
+      method: POST
+      params:
+        nonstored: "yes"
+      headers:
+        x-api-key: "{tavern.env_vars.TEST_API_KEY}"
+      json:
+        - "{file_id}"
+    response:
+      status_code: 200
+      body:
+        -
+          id: "{file_id}"
+          uploaded_at: !anystr
+          name: "test.pdf"
+          type: "multipart/form-data"
+          size: 13755

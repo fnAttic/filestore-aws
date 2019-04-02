@@ -1,0 +1,210 @@
+digraph G {
+    // This diagram uses the AWS PNG icon set Light_BG style
+    // symlink the folder here as 'icons'
+
+    rankdir=LR
+    ranksep=1
+    layout=dot
+    // graph [bgcolor=grey50]
+
+    client [
+        group=a
+        shape=none
+        label=""
+        xlabel="Client"
+        fontname="Arial"
+        fixedsize=true width=1 height=1
+        image="icons/_General_AWS/Client_light-bg.png"
+    ]
+
+    subgraph cluster_triggers {
+
+        graph[style=invis]
+
+        api_gateway [
+            group=a
+            shape=none
+            label=""
+            xlabel="API Gateway"
+            fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Networking_and_Content_Delivery/Amazon-API-Gateway_light-bg.png"
+        ]
+
+        cloudwatch [
+            group=a
+            shape=none label=""
+            xlabel="CloudWatch" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Management_and_Governance/Amazon-CloudWatch.png"
+        ]
+    }
+
+    subgraph cluster_lambdas {
+
+        graph[style=invis]
+
+        lambda_preprocess [
+            shape=none label=""
+            xlabel="Preprocess" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+
+        lambda_store [
+            shape=none label=""
+            xlabel="Store" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+
+        lambda_info [
+            shape=none label=""
+            xlabel="Info" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+
+        lambda_delete [
+            shape=none label=""
+            xlabel="Delete" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+
+        lambda_expire [
+            shape=none label=""
+            xlabel="Expire" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+    }
+
+    // subgraph cluster_s3_db {
+
+    //     graph[style=invis]
+
+        subgraph cluster_database {
+            label="Database"
+            fontname="Arial"
+            graph[style=dashed]
+
+            dynamo_db [
+                shape=none
+                label=""
+                xlabel="Dynamo DB"
+                fontname="Arial"
+                fixedsize=true width=1 height=1
+                image="./icons/Database/Amazon-DynamoDB_light-bg.png"
+            ]
+            ddb_table_filestore [
+                shape=none label=""
+                xlabel="Files" fontname="Arial"
+                fixedsize=true width=1 height=1
+                image="./icons/Database/Amazon-DynamoDB_Table_light-bg.png"
+            ]
+        }
+
+        subgraph cluster_storage {
+            label="Storage"
+            fontname="Arial"
+            graph[style=dashed]
+
+            s3 [
+                shape=none
+                label=""
+                xlabel="S3"
+                fontname="Arial"
+                fixedsize=true width=1 height=1
+                image="./icons/Storage/Amazon-Simple-Storage-Service-S3_light-bg.png"
+            ]
+            s3_bucket_filestore [
+                shape=none label=""
+                xlabel="Files" fontname="Arial"
+                fixedsize=true width=1 height=1
+                image="./icons/Storage/Amazon-Simple-Storage-Service-S3_Bucket_light-bg.png"
+            ]
+        }
+    // }    
+
+    subgraph cluster_lambdas_hook {
+
+        graph[style=invis]
+
+        lambda_uploaded [
+            shape=none label=""
+            xlabel="Uploaded" fontname="Arial"
+            fixedsize=true width=1 height=1
+            image="icons/Compute/AWS-Lambda_light-bg.png"
+        ]
+
+    }
+
+    // Connections
+
+    client -> api_gateway [
+        label="HTTP" fontname="Arial"
+    ]
+    api_gateway -> lambda_preprocess [
+        label="POST /file" fontname="Arial"
+    ]
+    api_gateway -> lambda_info [
+        label="🔑 POST /files" fontname="Arial"
+    ]
+    api_gateway -> lambda_store [
+        label="🔑 PUT /files" fontname="Arial"
+    ]
+    api_gateway -> lambda_delete [
+        label="🔑 DELETE /files" fontname="Arial"
+    ]
+    cloudwatch -> lambda_expire [
+        label="rate(1 hours)" fontname="Arial"
+    ]
+    s3_bucket_filestore -> lambda_uploaded [
+        label="ObjectCreated" fontname="Arial"
+    ]
+
+    lambda_preprocess -> ddb_table_filestore [
+        label="put_item"  fontname="Arial"        
+    ]
+    lambda_info -> ddb_table_filestore [
+        label="get_item"  fontname="Arial"
+    ]
+    lambda_store -> ddb_table_filestore [
+        label="update_item"  fontname="Arial"
+    ]
+    lambda_delete -> ddb_table_filestore [
+        label="update_item"  fontname="Arial"
+    ]
+    lambda_expire -> ddb_table_filestore [
+        label="update_item"  fontname="Arial"
+    ]
+    lambda_uploaded -> ddb_table_filestore [
+        label="update_item"  fontname="Arial"
+    ]
+    lambda_info -> ddb_table_filestore [
+        label="batch_get_item"  fontname="Arial"
+    ]
+
+    lambda_preprocess -> s3_bucket_filestore [
+        style=dashed
+        label="generate_presigned_url"  fontname="Arial"
+    ]
+    lambda_info -> s3_bucket_filestore [
+        style=dashed
+        label="generate_presigned_url"  fontname="Arial"
+    ]
+    lambda_delete -> s3_bucket_filestore [
+        label="delete_object"  fontname="Arial"
+    ]
+    lambda_expire -> s3_bucket_filestore [
+        label="delete_object"  fontname="Arial"
+    ]
+
+    client -> s3_bucket_filestore [
+        label="PUT [presigned_url]"  fontname="Arial"
+    ]
+    client -> s3_bucket_filestore [
+        label="GET [presigned_url]"  fontname="Arial"
+    ]
+}
