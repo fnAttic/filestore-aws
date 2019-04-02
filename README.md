@@ -8,7 +8,7 @@ A cloud file storage API backed by S3 and a sample client based on [FilePond](ht
 * REST API, Security: API KEY
 * FilePond client
 
-<img src="architecture/diagram.png" width="400px">
+<img src="architecture/diagram.png" width="800px">
 
 ## Prerequisites
 
@@ -23,9 +23,11 @@ A cloud file storage API backed by S3 and a sample client based on [FilePond](ht
 1. Create S3 bucket for deployment
 
     ```BUCKET NAME``` is where the deployment artefacts are placed
-    
-        aws s3api create-bucket --bucket [BUCKET NAME]
 
+    ```REGION``` is where your bucket is created
+    
+        aws s3api create-bucket --bucket [BUCKET NAME] --create-bucket-configuration LocationConstraint=[REGION]
+    
 1. Upload Swagger (OpenAPI) file
 
         aws s3 cp swagger.yaml s3://[BUCKET NAME]/
@@ -116,3 +118,40 @@ A cloud file storage API backed by S3 and a sample client based on [FilePond](ht
 Remove the deployment (deleting stack) if the app is not needed anymore, or if something goes wrong during deployment that needs fixing before trying it again.
 
         aws cloudformation delete-stack --stack-name FilestoreAppStack
+
+## Web app client
+
+There is an example web app client you can deploy for testing purposes.
+
+1. Create S3 bucket for the static site
+
+    ```WEB BUCKET NAME``` is the bucket where the the static site is deployed
+    
+    ```REGION``` is where your bucket is created
+    
+        aws s3api create-bucket --bucket [WEB BUCKET NAME] --create-bucket-configuration LocationConstraint=[REGION]
+        
+    Note the response will include your S3 static website link, something like http://[WEB BUCKET NAME].s3.amazonaws.com/
+
+1. Update the S3 bucket policy to allow public acces
+
+        aws s3api put-bucket-policy --bucket [WEB BUCKET NAME]\
+            --policy '{"Version": "2012-10-17", "Statement": [{ "Sid": "Allow Public Access to All Objects", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::[WEB BUCKET NAME]/*"}]}'
+
+1. Update S3 bucket website hosting configuration
+
+        aws s3api put-bucket-website --bucket [WEB BUCKET NAME] --website-configuration '{"IndexDocument": {"Suffix": "index.html"},"ErrorDocument": {"Key": "error.html"},"RoutingRules": [{"Redirect": {"ReplaceKeyWith": "index.html"},"Condition": {"KeyPrefixEquals": "/"}}]}'       
+
+1. Update the Filestore app URL
+    
+    Open the ```static/web/index.html``` file and replace the ```[YOUR_URL]/[YOUR ENVIRONMENT]``` at the bottom with the Filestore app URL, which is the ```ApiRootUrl``` from the CloudFormation output.
+
+    Use the environment from the deployment configuration, or use ```dev``` if you kept the default.
+
+    The final URL will look like: https://xxxxxxxxx.execute-api.xxxxxx.amazonaws.com/dev
+
+1. Upload static files
+
+        aws s3 cp static/web s3://[WEB BUCKET NAME] --recursive --acl public-read
+ 
+1. Open the website at http://[WEB BUCKET NAME].s3.amazonaws.com/index.html
