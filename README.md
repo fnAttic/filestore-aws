@@ -43,7 +43,7 @@ A cloud file storage API backed by S3 and a sample client based on [FilePond](ht
 1. Deploy the project with CloudFormation
 
         aws cloudformation deploy --template-file dist/packaged.yaml\
-            --stack-name FilestoreAppStack --s3-bucket fnattic-deployment --capabilities CAPABILITY_NAMED_IAM\
+            --stack-name FilestoreAppStack --s3-bucket [BUCKET NAME] --capabilities CAPABILITY_NAMED_IAM\
             --parameter-overrides "StorageBucketName=filestore-project"\
                 "SwaggerLocation=s3://[BUCKET NAME]/swagger.yaml"
 
