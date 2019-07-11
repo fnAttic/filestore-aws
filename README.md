@@ -1,3 +1,5 @@
+# Moved to https://github.com/designfultech/filestore-aws
+
 # Filestore [Serverless App]
 
 A cloud file storage API backed by S3 and a sample client based on [FilePond](https://pqina.nl/filepond/).
